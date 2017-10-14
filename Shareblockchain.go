@@ -11,7 +11,12 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"golang.org/x/net/websocket"
 )
 
@@ -91,6 +96,140 @@ func handleBlocks(w http.ResponseWriter, r *http.Request) {
 	bs, _ := json.Marshal(blockchain)
 	w.Write(bs)
 }
+
+func queryReturn(id string, seer *session.Session) (result *dynamodb.GetItemOutput) {
+
+	svc := dynamodb.New(seer)
+
+	input := &dynamodb.GetItemInput{
+		Key: map[string]*dynamodb.AttributeValue{
+			"userid": {
+				S: aws.String(id),
+			},
+		},
+		TableName: aws.String("user"),
+	}
+
+	result, err := svc.GetItem(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code() {
+			case dynamodb.ErrCodeProvisionedThroughputExceededException:
+				fmt.Println(dynamodb.ErrCodeProvisionedThroughputExceededException, aerr.Error())
+			case dynamodb.ErrCodeResourceNotFoundException:
+				fmt.Println(dynamodb.ErrCodeResourceNotFoundException, aerr.Error())
+			case dynamodb.ErrCodeInternalServerError:
+				fmt.Println(dynamodb.ErrCodeInternalServerError, aerr.Error())
+			default:
+				fmt.Println(aerr.Error())
+			}
+		} else {
+			// Print the error, cast err to awserr.Error to get the Code and
+			// Message from an error.
+			fmt.Println(err.Error())
+		}
+		return
+	}
+
+	return result
+}
+
+func parseData(Data string) (Userid string, Amount string, Artistid string, Song string) {
+
+	parseOne := strings.Split(Data, ";")
+	parseUID := strings.Split(parseOne[1], ":")
+	parseAmt := strings.Split(parseOne[2], ":")
+	parseAid := strings.Split(parseOne[3], ":")
+	parseS := strings.Split(parseOne[4], ":")
+
+	return parseUID[1], parseAmt[1], parseAid[1], parseS[1]
+
+}
+
+func ExtractArgsWithinBrackets(str string) (res []string) {
+
+	brackets := &unicode.RangeTable{
+		R16: []unicode.Range16{
+			{0x0028, 0x0029, 1}, // ( )
+			{0x005b, 0x005d, 1}, // [ ]
+			{0x007b, 0x007d, 1}, // { }
+		},
+	}
+
+	isBracket := func(r rune) bool {
+		if unicode.In(r, brackets) {
+			return true
+		}
+		return false
+	}
+
+	args := strings.FieldsFunc(str, isBracket)
+	for _, a := range args {
+		a = strings.TrimSpace(a)
+		a = strings.TrimPrefix(a, ",")
+		a = strings.TrimSuffix(a, ",")
+		if a != "" {
+			res = append(res, "("+a+")")
+		}
+	}
+
+	return
+}
+
+func checkOriginalPurchase(data string) (result int) {
+
+	/*
+		Useridp, Userids, Artistid, Song := parseData(data)
+
+		seer, _ := session.NewSession(&aws.Config{
+			Region: aws.String("ap-southeast-1"),
+		})
+
+		response := queryReturn(Userid, seer)
+
+		res := ExtractArgsWithinBrackets(fmt.Sprintf("%v", response))
+
+		var pos int
+		var rgx = regexp.MustCompile(`\"(.*?)\"`)
+
+		for _, r := range res {
+			pos = pos + 1
+			if r == "(userid:)" {
+				break
+			} else if r == "(\n    userid:)" {
+				break
+			}
+		}
+
+		rsa := rgx.FindStringSubmatch(res[pos])
+
+		inCredit, err := strconv.Atoi(Amount)
+		if err != nil {
+			// handle error
+			fmt.Println(err)
+			os.Exit(2)
+		}
+
+		payment, err := strconv.Atoi(rsa[1])
+		if err != nil {
+			// handle error
+			fmt.Println(err)
+			os.Exit(2)
+		}
+
+		if payment >= inCredit {
+			fmt.Println("Enough Money")
+			return 0
+		}
+
+		fmt.Println("No Money")
+		return 1
+	*/
+
+	return 0
+
+}
+
 func handleMineBlock(w http.ResponseWriter, r *http.Request) {
 	var v struct {
 		Data string `json:"data"`
